@@ -22,6 +22,105 @@ class SqueezeAndExcitationBlock(tf.keras.layers.Layer):
         x = tf.keras.activations.sigmoid(x)
         return x
 
+class EncoderToDecoderSkip(tf.keras.layers.Layer):
+    """
+    Block takes RGB and D features, applies spatial attention to both of them and then the result up.
+    """
+    def __init__(self, output_features_count, apply_attention_to_result=True):
+        super(EncoderToDecoderSkip, self).__init__()
+        self.output_features_count = output_features_count
+        self.apply_attention_to_result=apply_attention_to_result
+    def build(self,input_shape):
+        #Note: grouping 1x1 conv may reduce computational complexity
+        channel_count_rgb=int(self.output_features_count/2)
+        channel_count_depth=self.output_features_count - channel_count_rgb
+        self.conv1x1_first_rgb = tf.keras.layers.Conv2D(self.output_features_count, (1, 1),activation='relu')
+        self.conv1x1_first_depth = tf.keras.layers.Conv2D(self.output_features_count, (1, 1),activation='relu')
+        self.concat = tf.keras.layers.Concatenate()
+        if self.apply_attention_to_result:
+            self.final_multiply = tf.keras.layers.Multiply()
+            self.conv1x1_attentional = tf.keras.layers.Conv2D(self.output_features_count, (1, 1),activation='sigmoid')
+
+    def call(self,inputs):
+        input_rgb,input_depth = inputs
+        rgb = self.conv1x1_first_rgb(input_rgb)
+        depth=self.conv1x1_first_depth(input_depth)
+        x=self.concat([rgb,depth])
+        if self.apply_attention_to_result:
+            x_attention=self.conv1x1_attentional(x)
+            x=self.final_multiply([x,x_attention])
+        return x
+
+
+class UniteAndDivideAttentionModule(tf.keras.layers.Layer):
+    """
+    Block first applies 1x1 conv to reduce channel size for RGb and D and then applies attention based on the fused rGB and D channels
+    Block may be unnecessarily large.
+
+    Used for fusing information between encoder branches (after every Resplacement Module)
+    """
+    def __init__(self, output_features_count):
+        super(UniteAndDivideAttentionModule, self).__init__()
+        self.output_features_count = output_features_count
+
+
+    def build(self, input_shape):
+        # Note: grouping 1x1 conv may reduce computational complexity
+        channel_count=self.output_features_count
+        self.conv1x1_rgb = tf.keras.layers.Conv2D(channel_count, (1, 1),activation='relu')
+        self.conv1x1_depth = tf.keras.layers.Conv2D(channel_count, (1, 1),activation='relu')
+
+        self.concat_united = tf.keras.layers.Concatenate()
+        self.conv1x1_united_first = tf.keras.layers.Conv2D(int(channel_count/4), (1, 1),activation='relu')
+        self.conv1x1_united_to_rgb = tf.keras.layers.Conv2D(1, (1, 1), activation='sigmoid')
+        self.conv1x1_united_to_depth = tf.keras.layers.Conv2D(1, (1, 1), activation='sigmoid')
+        self.multiply_to_rgb = tf.keras.layers.Multiply()
+        self.multiply_to_depth = tf.keras.layers.Multiply()
+
+    def call(self, inputs):
+        rgb_in,depth_in=inputs
+        rgb= self.conv1x1_rgb(rgb_in)
+        depth=self.conv1x1_depth(depth_in)
+
+        united = self.concat_united([rgb,depth])
+        united = self.conv1x1_united_first(united)
+        united_to_rgb = self.conv1x1_united_to_rgb(united)
+        united_to_depth = self.conv1x1_united_to_depth(united)
+
+        depth_out= self.multiply_to_depth([united_to_depth])
+        rgb_out = self.multiply_to_rgb([united_to_rgb])
+
+        return rgb_out,depth_out
+
+class EncoderFusionBlock(tf.keras.layers.Layer):
+    #takes features from RGB and D channel and calculates which features should be passed on to RGB and D channel respectively
+    """
+    Some more planing has to be done, this code is currently not complete.
+    First attempt: use this for fusing at the end of encoder
+    """
+    def __init__(self, input_features_count):
+        super(EncoderFusionBlock,self).__init__()
+        self.input_featrues_count=input_features_count
+    def build(self, input_shape):
+        #define layers here
+        self.initial_concat = tf.keras.layers.Concatenate()
+        self.conv1x1_first = tf.keras.layers.Conv2D(self.input_featrues_count,(1,1),activation='relu')
+        self.conv1x1_second = tf.keras.layers.Conv2D(int(self.input_featrues_count/16),(1,1),activation='relu')
+        self.conv1x1_third = tf.keras.layers.Conv2D(self.input_featrues_count,(1,1),activation='sigmoid')
+        self.final_multiply = tf.keras.layers.Multiply()
+        self.final_add=tf.keras.layers.Add()
+
+    def call(self,inputs):
+        rgb_features,depth_features=inputs
+        x = self.initial_concat([rgb_features,depth_features])
+        x = self.conv1x1_first(x)
+        x = self.conv1x1_second(x)
+        x = self.conv1x1_third(x)
+        x= self.final_multiply([x,depth_features])
+        rgb_out= self.final_add([x,rgb_features])
+        depth_out=x
+        return rgb_out,depth_out
+
 
 class ResplacementBlock(tf.keras.layers.Layer):
     """
@@ -114,6 +213,35 @@ class ResplacementBlock(tf.keras.layers.Layer):
 
         return output
 
+class ChannelSplitter(tf.keras.layers.Layer):
+    def __init__(self, **kwargs):
+        super(ChannelSplitter, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        #self.reshape_r= tf.keras.layers.Reshape((256,256,1))
+        #self.reshape_g= tf.keras.layers.Reshape((256,256,1))
+        #self.reshape_b= tf.keras.layers.Reshape((256,256,1))
+        self.reshape_d= tf.keras.layers.Reshape((256,256,1))
+
+    def call(self, inputs):
+       ## Split the input tensor into color channels.
+       ##256,256,4
+       #red_channel = inputs[..., 0]
+       ##red_channel = tf.expand_dims(red_channel,-1)
+       #red_channel = self.reshape_r(red_channel)
+       #green_channel = inputs[..., 1]
+       ##green_channel = tf.expand_dims(green_channel,-1)
+       #green_channel = self.reshape_g(green_channel)
+       #blue_channel =  inputs[..., 2]
+       ##blue_channel =  tf.expand_dims(blue_channel,-1)
+       #blue_channel =  self.reshape_b(blue_channel)
+       depth_channel=  inputs[...,3]
+       #depth_channel=  tf.expand_dims(depth_channel,-1)
+       depth_channel=  self.reshape_d(depth_channel)
+       #rgb=tf.concat([red_channel,green_channel,blue_channel], axis=-1)
+       # Return a list of channel tensors.
+       return inputs[..., 0:3], depth_channel
+
 
 class ResNetBlock(tf.keras.layers.Layer):
     def __init__(self, filters, kernel_size=(3, 3), stride=(1, 1), conv_shortcut=False):
@@ -155,4 +283,30 @@ class ResNetBlock(tf.keras.layers.Layer):
         x = tf.keras.layers.Add()([x, shortcut])
         x = tf.keras.layers.ReLU()(x)
 
+        return x
+
+
+
+
+class ResplacmentUpsamplingBlock(tf.keras.layers.Layer):
+    def __init__(self, filters, kernel_size=(3, 3), stride=(2, 2)):
+        super(ResplacmentUpsamplingBlock, self).__init__()
+        self.filters=filters
+        self.kernel_size=kernel_size
+        self.stride=stride
+    def build(self, input_shape):
+        self.tconv = tf.keras.layers.Conv2DTranspose(self.filters, self.kernel_size, strides=self.stride, padding='same')
+        #self.tconv_1 = tf.keras.layers.Conv2DTranspose(self.filters, (self.kernel_size[0],1), strides=(self.stride[0],1), padding='same')
+        #self.tconv_2 = tf.keras.layers.Conv2DTranspose(self.filters, (1,self.kernel_size[1]), strides=(1,self.stride[1]), padding='same')
+        self.batchNorm = tf.keras.layers.BatchNormalization()
+        self.relu = tf.keras.layers.ReLU()
+
+    def call(self, inputs):
+        #x=self.tconv_1(inputs)
+        #x=self.tconv_2(x)
+
+        x=self.tconv(inputs)
+
+        x=self.batchNorm(x)
+        x=self.relu(x)
         return x
