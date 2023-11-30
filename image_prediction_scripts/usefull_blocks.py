@@ -1,5 +1,6 @@
 
 
+
 import tensorflow as tf # note that tensorflow wont run on windows,
 #please run in docker using docker run -it --rm -v "D:\Uni\Master3\pythonTestFolder":/tmp -w  /tmp tensorflow/tensorflow
 
@@ -310,3 +311,50 @@ class ResplacmentUpsamplingBlock(tf.keras.layers.Layer):
         x=self.batchNorm(x)
         x=self.relu(x)
         return x
+
+
+
+
+def get_resnet_module(filters,input,perform_pooling=True):
+    if perform_pooling:
+        input = tf.keras.layers.MaxPooling2D()(input)
+    rgb_branch = tf.keras.layers.Conv2D(filters, 3, strides=(1,1), padding='same')(input)
+    tf.keras.layers.ReLU()(rgb_branch)
+    rgb_branch = ResNetBlock(filters)(rgb_branch)
+    rgb_branch = ResNetBlock(filters)(rgb_branch)
+    rgb_branch = ResNetBlock(filters)(rgb_branch)
+    return rgb_branch
+
+
+def get_ResNet_model(OUTPUT_CLASSES=2):
+    input_rgbd = tf.keras.layers.Input(shape=(256, 256, 4))
+    input_rgb, input_d = ChannelSplitter()(input_rgbd)
+
+    rgb_branch= tf.keras.layers.Conv2D(64, 3,strides=(2,2), padding='same')(input_rgb)
+    rgb_branch = get_resnet_module(64, rgb_branch)  # 128x128
+    rgb_branch = get_resnet_module(128, rgb_branch, perform_pooling=True)  # 64#64
+    rgb_branch = get_resnet_module(256, rgb_branch, perform_pooling=False)  # 32x32
+    rgb_branch = get_resnet_module(512, rgb_branch, perform_pooling=False)
+
+    depth_branch= tf.keras.layers.Conv2D(64, 3,strides=(2,2), padding='same')(input_d)
+    depth_branch = get_resnet_module(64, depth_branch)
+    depth_branch = get_resnet_module(128, depth_branch, perform_pooling=True)
+    depth_branch = get_resnet_module(256, depth_branch, perform_pooling=False)
+    depth_branch = get_resnet_module(512, depth_branch, perform_pooling=False)
+
+    # rgb_branch,depth_branch=blocks.EncoderFusionBlock(512)([rgb_branch,depth_branch])
+    merged = tf.keras.layers.Concatenate()([rgb_branch, depth_branch])
+    
+    decoder = ResplacmentUpsamplingBlock(256)(merged)  # 64
+    decoder = ResplacmentUpsamplingBlock(128)(decoder)
+    decoder = ResplacmentUpsamplingBlock(64)(decoder)
+    decoder = tf.keras.layers.Conv2D(filters=OUTPUT_CLASSES, kernel_size=(3, 3), padding='same')(decoder)
+    decoder = tf.keras.layers.Softmax()(decoder)
+    model = tf.keras.models.Model(inputs=input_rgbd, outputs=decoder)
+
+    return model
+
+
+
+
+
