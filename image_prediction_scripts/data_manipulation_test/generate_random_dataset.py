@@ -79,7 +79,7 @@ def rotate_image(image, angle, inter="linear"):
     return result
 
 
-def generate_altered_dataset(origin_path, target_path, replication_rate=8):
+def generate_altered_dataset(origin_path, target_path, replication_rate=4):
     """
     Generates a new dataset (from origin path) and saves it in target_path, #replicationrate altered images are saved,
     image names are not kept
@@ -105,14 +105,16 @@ def generate_altered_dataset(origin_path, target_path, replication_rate=8):
         angle_image = np.arctan2(vertical, horizontal)
         save_image_pair(target_path, rgb, depth, grasp, angle_image,image_count)
         image_count+=1
+
+
         for i in range(replication_rate):
-            rgb_new,d_new,grasp_new,angle_image_new= generate_altered_images(rgb, depth, grasp, horizontal, vertical)
+            rgb_new,d_new,grasp_new,angle_image_new= generate_altered_images(rgb, depth, grasp, horizontal, vertical,flip_percent_h=0.3,flip_percent_w=0.3)
             save_image_pair(target_path,rgb_new,d_new,grasp_new,angle_image_new,image_count)
             image_count+=1
 
 
 if __name__ == "__main__":
-    origin_path = "C:\\Uni\\Master\\tensorflow_ws\\Datasets\\Datasets_grip_orientation\\002\\ok"
+    origin_path = "C:\\Uni\\Master\\tensorflow_ws\\Datasets\\Datasets_grip_orientation\\002_combined"
     target_path = "C:\\Uni\\Master\\tensorflow_ws\\Datasets\\Datasets_grip_orientation\\003"
 
     generate_altered_dataset(origin_path, target_path)

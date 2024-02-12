@@ -118,7 +118,8 @@ class EncoderFusionBlock(tf.keras.layers.Layer):
         x = self.conv1x1_second(x)
         x = self.conv1x1_third(x)
         x= self.final_multiply([x,depth_features])
-        rgb_out= self.final_add([x,rgb_features])
+        #rgb_out= self.final_add([x,rgb_features])
+        rgb_out=rgb_features
         depth_out=x
         return rgb_out,depth_out
 
@@ -219,28 +220,12 @@ class ChannelSplitter(tf.keras.layers.Layer):
         super(ChannelSplitter, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        #self.reshape_r= tf.keras.layers.Reshape((256,256,1))
-        #self.reshape_g= tf.keras.layers.Reshape((256,256,1))
-        #self.reshape_b= tf.keras.layers.Reshape((256,256,1))
+
         self.reshape_d= tf.keras.layers.Reshape((256,256,1))
 
     def call(self, inputs):
-       ## Split the input tensor into color channels.
-       ##256,256,4
-       #red_channel = inputs[..., 0]
-       ##red_channel = tf.expand_dims(red_channel,-1)
-       #red_channel = self.reshape_r(red_channel)
-       #green_channel = inputs[..., 1]
-       ##green_channel = tf.expand_dims(green_channel,-1)
-       #green_channel = self.reshape_g(green_channel)
-       #blue_channel =  inputs[..., 2]
-       ##blue_channel =  tf.expand_dims(blue_channel,-1)
-       #blue_channel =  self.reshape_b(blue_channel)
        depth_channel=  inputs[...,3]
-       #depth_channel=  tf.expand_dims(depth_channel,-1)
        depth_channel=  self.reshape_d(depth_channel)
-       #rgb=tf.concat([red_channel,green_channel,blue_channel], axis=-1)
-       # Return a list of channel tensors.
        return inputs[..., 0:3], depth_channel
 
 

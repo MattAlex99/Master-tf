@@ -96,7 +96,7 @@ def get_path_names_orientation_datset(directory,shuffle=False):
     dataset = tf.data.Dataset.from_tensor_slices((image_paths, depth_paths,mask_paths,angle_paths))
     return dataset
 
-def map_name_angle_dataset(color_path,depth_path,mask_path,angle_path,image_size=(256,256),depth_scaling=1000,mask_scaling=255):
+def map_name_angle_dataset(color_path,depth_path,mask_path,angle_path,image_size=(256,256),depth_scaling=1000,mask_scaling=255,normalize_depth=False, remove_far_away_pixels=800):
     #load_rgb_image
     image = tf.io.read_file(color_path)
     image = tf.image.decode_png(image, channels=3)
@@ -118,14 +118,22 @@ def map_name_angle_dataset(color_path,depth_path,mask_path,angle_path,image_size
     angle_raw = tf.image.resize(angle_raw, image_size, method='nearest')
     angle_raw= tf.cast(angle_raw,tf.float32)
     angle_raw = angle_raw/255*np.pi
-    angle_x_vertical=tf.math.sin(angle_raw) #* mask_graspability
-    angle_x_horizontal=tf.math.cos(angle_raw) #* mask_graspability
+    angle_x_vertical=tf.math.sin(angle_raw) * mask_graspability
+    angle_x_horizontal=tf.math.cos(angle_raw) * mask_graspability
     #load_depth_image
     depth = tf.io.read_file(depth_path)
     depth = tf.image.decode_png(depth, channels=1, dtype=_dtypes.uint16)
     depth = tf.image.resize(depth, image_size)
     depth = tf.cast(depth, tf.float32)
-    depth= depth / depth_scaling
+    if remove_far_away_pixels>=0:
+        # threshhold depth image
+        depth=tf.clip_by_value(depth,0,remove_far_away_pixels)
+    if normalize_depth:
+        derivation=tf.math.reduce_std(depth)
+        mean=tf.math.reduce_mean(depth)
+        depth=(depth-mean)/derivation
+    else:
+        depth= depth / depth_scaling
 
     #concatenate vectors
     rgbd_tensor = tf.concat([image,depth], axis=-1) #0-2 are rgb, 3 is d

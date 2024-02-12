@@ -14,20 +14,20 @@ from IPython.display import clear_output
 
 
 img_height = 256
-img_height = 256
 img_width = 256
 BATCH_SIZE = 4
 TRAIN_SPLIT=0.8
 BUFFER_SIZE = 2
 OUTPUT_CLASSES = 2
 CONTINUE_TRAINING=False
-model_path="../../models_trained/architecture_graspabiltiy/test_2"
+model_path="../../models_trained/architecture_graspabiltiy/test_more_local_non_normalized_max_distance800_no_add_attention_to_rgb"
 #base_directory = "../../Datasets/grasp_point_detection/ok"
 base_directory = "../../Datasets/Datasets_grip_orientation/003"
 
 dataset_directory = base_directory
 
 text_dataset= helpers.get_path_names_orientation_datset(base_directory)
+
 dataset= text_dataset.map(helpers.map_name_angle_dataset)
 
 
@@ -38,18 +38,19 @@ def display_from_dataset(dataset,count):
         rgb=rgbd_batch[0][...,0:3]
         depth=rgbd_batch[0][...,3]
         label_batch=data[1]
-        mask_graspability=label_batch[1][0]
-        mask_horzontal=np.abs(label_batch[1][1]) #negative values would be dispayed as
-        mask_vertical= np.abs(label_batch[1][2])
+
+        mask_graspability=label_batch[0][0]
+        mask_horzontal=np.abs(label_batch[1][0]) #negative values would be dispayed as
+        mask_vertical= np.abs(label_batch[2][0])
         cv2.imshow("rgb",rgb)
         cv2.imshow("depth",depth)
         cv2.imshow("mask_graspability",mask_graspability)
         cv2.imshow("mask_horizontal",mask_horzontal)
         cv2.imshow("mask_vertical",mask_vertical)
-        for n in mask_horzontal:
-            print(n)
-        plt.imshow(mask_horzontal)
-        plt.axis('off')
+        #for n in mask_horzontal:
+        #    print(n)
+        plt.imshow(depth)
+        #plt.axis('off')
         plt.show()
         cv2.waitKey(0)
 
@@ -78,14 +79,13 @@ class Augment(tf.keras.layers.Layer):
 
     self.augment_brightness=tf.keras.layers.RandomBrightness(factor=0.2, value_range=(0.0,1.0), seed=seed)
 
-    height_factor=(-0.3,0.3)
-    width_factor=(-0.3,0.3)
-    self.augment_zoom_rgb=          tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,height_factor=height_factor, width_factor=width_factor,seed=seed)
-    self.augment_zoom_depth=        tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,height_factor=height_factor, width_factor=width_factor,seed=seed)
-    self.augment_zoom_mask_horiz2=        tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,height_factor=height_factor, width_factor=width_factor,seed=seed)
-    self.augment_zoom_mask_horiz=   tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,height_factor=height_factor, width_factor=width_factor,seed=seed)
-    self.augment_zoom_mask_grip=    tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,height_factor=height_factor, width_factor=width_factor,seed=seed)
-    self.augment_zoom_mask_verti=   tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,height_factor=height_factor, width_factor=width_factor,seed=seed)
+    height_factor=(-0.4,0.4)
+    width_factor=(-0.4,0.4)
+    self.augment_zoom_rgb=          tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,interpolation="bilinear",height_factor=height_factor, width_factor=width_factor,seed=seed)
+    self.augment_zoom_depth=        tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,interpolation="bilinear",height_factor=height_factor, width_factor=width_factor,seed=seed)
+    self.augment_zoom_mask_horiz=   tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,interpolation="nearest",height_factor=height_factor, width_factor=width_factor,seed=seed)
+    self.augment_zoom_mask_grip=    tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,interpolation="nearest",height_factor=height_factor, width_factor=width_factor,seed=seed)
+    self.augment_zoom_mask_verti=   tf.keras.layers.RandomZoom(fill_mode="constant",fill_value=0.0,interpolation="nearest",height_factor=height_factor, width_factor=width_factor,seed=seed)
 
   def call(self, inputs, labels):
     inputs_rgb=inputs[...,0:3]
@@ -104,7 +104,7 @@ class Augment(tf.keras.layers.Layer):
 
     inputs_rgb = self.augment_zoom_rgb(inputs_rgb)
     inputs_d =   self.augment_zoom_depth(inputs_d)
-    horiz =      self.augment_zoom_mask_horiz2(horiz)
+    horiz =      self.augment_zoom_mask_horiz(horiz)
     grip =       self.augment_zoom_mask_grip(grip)
     verti =      self.augment_zoom_mask_verti(verti)
 
@@ -119,7 +119,7 @@ train_batches = (
     .shuffle(BUFFER_SIZE)
     .batch(BATCH_SIZE)
     .repeat()
-    #.map(Augment())
+    .map(Augment())
     .prefetch(buffer_size=tf.data.AUTOTUNE)
     )
 #display_from_dataset(train_batches,100)
@@ -139,16 +139,16 @@ print(type(test_batches))
 def get_initial_resplacement_module(filters,input):
     rgb_branch= tf.keras.layers.Conv2D(filters, 3,strides=(2,2), padding='same')(input)
     #rgb_branch= tf.keras.layers.Conv2D(filters, 3,strides=(2,2), padding='same')(rgb_branch)
-    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.5,first_dilation_rate=1,second_dilation_rate=1) (rgb_branch)
-    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.5,first_dilation_rate=1,second_dilation_rate=1) (rgb_branch)
+    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.8,first_dilation_rate=1,second_dilation_rate=1) (rgb_branch)
+    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.8,first_dilation_rate=1,second_dilation_rate=1) (rgb_branch)
     return rgb_branch
 
 def get_regular_resplacement_module(filters, input,perform_pooling=True):
     if perform_pooling:
         input = tf.keras.layers.MaxPooling2D()(input)
-    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.5,first_dilation_rate=3,second_dilation_rate=5,apply_skip=False) (input)
-    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.5,first_dilation_rate=3,second_dilation_rate=5) (rgb_branch)
-    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.5,first_dilation_rate=3,second_dilation_rate=5) (rgb_branch)
+    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.8,first_dilation_rate=3,second_dilation_rate=5,apply_skip=False) (input)
+    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.8,first_dilation_rate=3,second_dilation_rate=5) (rgb_branch)
+    rgb_branch = blocks.ResplacementBlock(filters,local_filters_ratio=0.8,first_dilation_rate=3,second_dilation_rate=5) (rgb_branch)
     return rgb_branch
 
 
@@ -156,6 +156,7 @@ def get_regular_resplacement_module(filters, input,perform_pooling=True):
 """
 The section below will asemble a functional encoder 
 """
+
 
 print("\n\nXXXXXXXX-Building model-XXXXXXXX\n\n")
 #build encoder from individual blocks
@@ -178,7 +179,7 @@ depth_branch= get_regular_resplacement_module(256,depth_branch,perform_pooling=F
 #depth_branch= get_regular_resplacement_module(256,depth_branch,perform_pooling=False)
 depth_branch= get_regular_resplacement_module(512,depth_branch,perform_pooling=False)
 
-#rgb_branch,depth_branch=blocks.EncoderFusionBlock(512)([rgb_branch,depth_branch])
+rgb_branch,depth_branch=blocks.EncoderFusionBlock(512)([rgb_branch,depth_branch])
 merged = tf.keras.layers.Concatenate()([rgb_branch,depth_branch])
 #merged=rgb_branch
 
