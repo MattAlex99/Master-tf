@@ -1,10 +1,12 @@
 
 
 
-import tensorflow as tf # note that tensorflow wont run on windows,
-#please run in docker using docker run -it --rm -v "D:\Uni\Master3\pythonTestFolder":/tmp -w  /tmp tensorflow/tensorflow
+import tensorflow as tf
 
-#TODO: Fragen ob class based or function based layers are better
+"""
+This script defines the different blocks proposed in my work. They are classes, that extend the keras.layers.Layer class
+and can be used just like regular layers.
+"""
 
 class SqueezeAndExcitationBlock(tf.keras.layers.Layer):
     """

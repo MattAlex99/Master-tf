@@ -114,10 +114,12 @@ def get_resplacement_layers(model):
     return semi_local_kernels, semi_local_bias, fully_local_kernels,fully_local_bias
 
 if __name__=="__main__":
+    """
+    If you cant install graviz on your device, you can still run this script, if you set plot model to false
+    """
+
     plot_model=True
-    #model_path = "../../../models_trained/architecture_graspabiltiy/test_more_local_non_normalized_max_distance800"
     model_path = "../../../models_trained/architecture_graspabiltiy/test_more_local_non_normalized_max_distance800_no_add_attention_to_rgb"
-    #model_path = "../../../models_trained/architecture_graspabiltiy/"
     images_folder="../../images/"
     model = load_model(model_path)
     print(model.summary())

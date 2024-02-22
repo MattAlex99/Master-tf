@@ -12,6 +12,12 @@ import usefull_blocks
 import usefull_blocks as blocks
 from IPython.display import clear_output
 
+"""
+This file is used for training aa semantic segmentation model. This is not the model proposed in the paper. See "train_graspability_model.py" for this.
+
+The variables bellow can be used to configure the dataset used and model hyperparameters 
+"""
+
 
 img_height = 256
 img_width = 256
@@ -21,7 +27,6 @@ BUFFER_SIZE = 2
 OUTPUT_CLASSES = 2
 CONTINUE_TRAINING=False
 model_path="../../models_trained/architecture_reference/ResNet_Based_rgb_only"
-#base_directory = "../../Datasets/grasp_point_detection/ok"
 base_directory = "../../Datasets/reference/cleargrasp/"
 
 dataset_directory = base_directory
@@ -94,19 +99,13 @@ class Augment(tf.keras.layers.Layer):
     inputs= tf.concat([inputs_rgb,inputs_d], axis=-1)
     return inputs, labels
 
-def make_rgbd_tensor(rgb_tensor, depth_tensor, mask_tensor):
-    # Concatenate the RGB and depth tensors along the last axis to create the input tensor.
-    input_tensor = tf.concat([rgb_tensor, depth_tensor/1000], axis=-1)
-    return input_tensor, mask_tensor/255
+
 
 
 train_batches = (
     train_images
-    #.cache()
     .shuffle(BUFFER_SIZE)
     .batch(BATCH_SIZE)
-    #.cache()
-    #.map(make_rgbd_tensor)
     .repeat()
     .map(Augment())
     .prefetch(buffer_size=tf.data.AUTOTUNE)
@@ -115,10 +114,8 @@ train_batches = (
 print("train batches complete")
 test_batches = (
     test_images
-    #.cache()
     .shuffle(BUFFER_SIZE)
     .batch(BATCH_SIZE)
-    #.map(make_rgbd_tensor)
     .repeat()
     .prefetch(buffer_size=tf.data.AUTOTUNE)#
 )
@@ -241,8 +238,7 @@ def show_predictions(dataset=None, num=1):
       display([image,depth, mask[0], create_mask(pred_mask)])
   else:
     pass
-    #display([sample_image, sample_mask,
-     #        create_mask(model.predict(sample_image[tf.newaxis, ...]))])
+
 
 
 class DisplayCallback(tf.keras.callbacks.Callback):
@@ -284,16 +280,12 @@ VAL_SUBSPLITS = 5
 VALIDATION_STEPS = int (VAL_LENGTH)
 
 
-#model.save(model_path)
-#del model
-#
-#model=keras.models.load_model(model_path)
 
 if CONTINUE_TRAINING:
-#if False:
     model = keras.models.load_model(model_path)
 
 
+#remove comments to display some of your images
 #for input, mask in test_batches.take(3):
 #    input=input.numpy()[0]
 #    mask=mask.numpy()[0]

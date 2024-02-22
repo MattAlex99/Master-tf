@@ -21,8 +21,7 @@ BUFFER_SIZE = 2
 OUTPUT_CLASSES = 2
 CONTINUE_TRAINING=False
 model_path="../../models_trained/architecture_graspabiltiy/test_more_local_non_normalized_max_distance800_no_add_attention_to_rgb"
-#base_directory = "../../Datasets/grasp_point_detection/ok"
-base_directory = "../../Datasets/Datasets_grip_orientation/003"
+base_directory = "../../Datasets/Datasets_grip_orientation/003" #this is the path to the dataset containint the imgages and labels
 
 dataset_directory = base_directory
 
